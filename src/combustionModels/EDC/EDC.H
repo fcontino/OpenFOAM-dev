@@ -58,14 +58,17 @@ class EDC
 {
     // Private data
 
-        //- Mixing constant
-        scalar Cmix_;
+        //- Volume fraction constant
+        scalar Cepsilon_;
+
+        //- Time scale constant
+        scalar Ctau_;
 
         //- Turbulent reaction switch
         Switch turbulentReaction_;
 
         //- Mixing parameter
-        volScalarField kappa_;
+        volScalarField tau_;
 
 
     // Private Member Functions

@@ -37,20 +37,21 @@ Foam::combustionModels::EDC<Type>::EDC
 )
 :
     laminar<Type>(modelType, mesh, phaseName),
-    Cmix_(readScalar(this->coeffs().lookup("Cmix"))),
+    Cepsilon_(readScalar(this->coeffs().lookup("Cepsilon"))),
+    Ctau_(readScalar(this->coeffs().lookup("Ctau"))),
     turbulentReaction_(this->coeffs().lookup("turbulentReaction")),
-    kappa_
+    tau_
     (
         IOobject
         (
-            IOobject::groupName("EDC:kappa", phaseName),
+            IOobject::groupName("EDC:tau", phaseName),
             mesh.time().timeName(),
             mesh,
             IOobject::NO_READ,
             IOobject::AUTO_WRITE
         ),
         mesh,
-        dimensionedScalar("kappa", dimless, 0.0)
+        dimensionedScalar("tau", dimless, 0.0)
     )
 {}
 
@@ -75,31 +76,21 @@ void Foam::combustionModels::EDC<Type>::correct()
         {
             tmp<volScalarField> tepsilon(this->turbulence().epsilon());
             const volScalarField& epsilon = tepsilon();
+            tmp<volScalarField> tk(this->turbulence().k());
+            const volScalarField& k = tk();
             tmp<volScalarField> tmuEff(this->turbulence().muEff());
             const volScalarField& muEff = tmuEff();
-            tmp<volScalarField> ttc(this->tc());
-            const volScalarField& tc = ttc();
             tmp<volScalarField> trho(this->rho());
             const volScalarField& rho = trho();
 
             forAll(epsilon, i)
             {
-                scalar tk =
-                    Cmix_*sqrt(max(muEff[i]/rho[i]/(epsilon[i] + SMALL), 0));
+                scalar epsilonStar =
+                    Cepsilon_*sqrt(sqrt(muEff[i]/rho[i]*epsilon[i]/k[i]));
 
-                if (tk > SMALL)
-                {
-                    kappa_[i] = tc[i]/(tc[i] + tk);
-                }
-                else
-                {
-                    kappa_[i] = 1.0;
-                }
+                scalar tauStar = 
+                    Ctau_**sqrt(max(muEff[i]/rho[i]/(epsilon[i] + SMALL), 0));
             }
-        }
-        else
-        {
-            kappa_ = 1.0;
         }
     }
 }
@@ -109,7 +100,8 @@ template<class Type>
 Foam::tmp<Foam::fvScalarMatrix>
 Foam::combustionModels::EDC<Type>::R(volScalarField& Y) const
 {
-    return kappa_*laminar<Type>::R(Y);
+    // R = rho*epsilonStar*epsilonStar / tauStar / (1-pow(epsilonStar,3) * (Ystar - Y)
+    return laminar<Type>::R(Y);
 }
 
 
@@ -122,7 +114,7 @@ Foam::combustionModels::EDC<Type>::dQ() const
         new volScalarField
         (
             IOobject::groupName("EDC:dQ", this->phaseName_),
-            kappa_*laminar<Type>::dQ()
+            laminar<Type>::dQ()
         )
     );
 }
@@ -137,7 +129,7 @@ Foam::combustionModels::EDC<Type>::Sh() const
         new volScalarField
         (
             IOobject::groupName("EDC:Sh", this->phaseName_),
-            kappa_*laminar<Type>::Sh()
+            laminar<Type>::Sh()
         )
     );
 }
@@ -148,7 +140,8 @@ bool Foam::combustionModels::EDC<Type>::read()
 {
     if (laminar<Type>::read())
     {
-        this->coeffs().lookup("Cmix") >> Cmix_;
+        this->coeffs().lookup("Ctau") >> Ctau_;
+        this->coeffs().lookup("Cepsilon") >> Cepsilon_;
         this->coeffs().lookup("turbulentReaction") >> turbulentReaction_;
         return true;
     }
